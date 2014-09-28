@@ -256,6 +256,11 @@ public class Planner {
       result = createHashJoinFragment(
           (HashJoinNode) root, childFragments.get(1), childFragments.get(0),
           perNodeMemLimit, fragments, analyzer);
+    } else if (root instanceof NestedLoopJoinNode) {
+      Preconditions.checkState(childFragments.size() == 2);
+      result = createNestedLoopJoinFragment(
+          (NestedLoopJoinNode) root, childFragments.get(1), childFragments.get(0),
+          perNodeMemLimit, fragments, analyzer);
     } else if (root instanceof CrossJoinNode) {
       Preconditions.checkState(childFragments.size() == 2);
       result = createCrossJoinFragment(
@@ -590,6 +595,32 @@ public class Planner {
 
       return joinFragment;
     }
+  }
+
+  /**
+   * 
+   * @param node
+   * @param rightChildFragment
+   * @param leftChildFragment
+   * @param perNodeMemLimit
+   * @param fragments
+   * @param analyzer
+   * @return
+   * @throws InternalException
+   * @throws AuthorizationException
+   */
+  private PlanFragment createNestedLoopJoinFragment(
+      NestedLoopJoinNode node, PlanFragment rightChildFragment,
+      PlanFragment leftChildFragment, long perNodeMemLimit,
+      ArrayList<PlanFragment> fragments, Analyzer analyzer)
+      throws InternalException, AuthorizationException {
+    // The rhs tree is going to send data through an exchange node which effectively
+    // compacts the data. No reason to do it again at the rhs root node.
+    rightChildFragment.getPlanRoot().setCompactData(false);
+    node.setChild(0, leftChildFragment.getPlanRoot());
+    connectChildFragment(analyzer, node, 1, rightChildFragment);
+    leftChildFragment.setPlanRoot(node);
+    return leftChildFragment;
   }
 
   /**
@@ -1186,6 +1217,11 @@ public class Planner {
     // plan generation (helps with tests)
     List<Pair<TableRef, PlanNode>> refPlans = Lists.newArrayList();
     for (TableRef ref: selectStmt.getTableRefs()) {
+      //If the enable_custom_op switch is set, set the join operator is cross join
+      if(analyzer.getQueryCtx().request.getQuery_options().enable_custom_op){
+        if(ref.getRealJoinOp() == JoinOperator.INNER_JOIN)
+          ref.setJoinOp(JoinOperator.CROSS_JOIN);
+      }
       PlanNode plan = createTableRefNode(analyzer, ref);
       Preconditions.checkState(plan != null);
       refPlans.add(new Pair(ref, plan));
@@ -1412,7 +1448,11 @@ public class Planner {
       throws InternalException, AuthorizationException {
     ScanNode scanNode = null;
     if (tblRef.getTable() instanceof HdfsTable) {
-      scanNode = new HdfsScanNode(nodeIdGenerator_.getNextId(), tblRef.getDesc(),
+      //if(analyzer.getQueryCtx().request.getQuery_options().enable_custom_op)
+       // scanNode = new CustomHdfsScanNode(nodeIdGenerator_.getNextId(), tblRef.getDesc(),
+        //    (HdfsTable)tblRef.getTable());
+      //else
+        scanNode = new HdfsScanNode(nodeIdGenerator_.getNextId(), tblRef.getDesc(),
           (HdfsTable)tblRef.getTable());
       scanNode.init(analyzer);
       return scanNode;
@@ -1565,9 +1605,14 @@ public class Planner {
   private PlanNode createJoinNode(
       Analyzer analyzer, PlanNode outer, PlanNode inner, TableRef innerRef,
       boolean throwOnError) throws ImpalaException {
+    PlanNode result = null;
     if (innerRef.getJoinOp() == JoinOperator.CROSS_JOIN) {
-      // TODO If there are eq join predicates then we should construct a hash join
-      CrossJoinNode result = new CrossJoinNode(outer, inner, innerRef);
+      if (analyzer.getQueryCtx().request.getQuery_options().isEnable_custom_op())
+        result = new NestedLoopJoinNode(outer, inner, innerRef);
+      else
+        // TODO If there are eq join predicates then we should construct a hash join
+        result = new CrossJoinNode(outer, inner, innerRef);
+
       result.init(analyzer);
       result.getChildren().get(1).setCompactData(true);
       return result;
@@ -1597,8 +1642,19 @@ public class Planner {
       analyzer.markConjunctsAssigned(ojConjuncts);
     }
 
-    HashJoinNode result =
-        new HashJoinNode(outer, inner, innerRef, eqJoinConjuncts, ojConjuncts);
+     // Is the custom operator switch enabled?
+    
+
+//    if(analyzer.getQueryCtx().request.getQuery_options().enable_custom_op){
+//      result = new CustomHashJoinNode(outer, inner, innerRef, eqJoinConjuncts, ojConjuncts);
+//    }else{
+      result = new HashJoinNode(outer, inner, innerRef, eqJoinConjuncts, ojConjuncts);
+//    }
+
+    Preconditions.checkNotNull(result);
+
+    //HashJoinNode result =
+    //    new HashJoinNode(outer, inner, innerRef, eqJoinConjuncts, ojConjuncts);
     result.init(analyzer);
 
     // build side of join copies data to a compact representation in the tuple buffer

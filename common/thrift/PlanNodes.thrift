@@ -29,8 +29,10 @@ include "ExternalDataSource.thrift"
 
 enum TPlanNodeType {
   HDFS_SCAN_NODE,
+  CUSTOM_HDFS_SCAN_NODE,
   HBASE_SCAN_NODE,
   HASH_JOIN_NODE,
+  NESTED_LOOP_JOIN_NODE,
   AGGREGATION_NODE,
   SORT_NODE,
   EXCHANGE_NODE,
@@ -101,6 +103,10 @@ struct TScanRange {
 }
 
 struct THdfsScanNode {
+  1: required Types.TTupleId tuple_id
+}
+
+struct TCustomHdfsScanNode {
   1: required Types.TTupleId tuple_id
 }
 
@@ -243,9 +249,11 @@ struct TPlanNode {
 
   // one field per PlanNode subclass
   9: optional THdfsScanNode hdfs_scan_node
+  20: optional TCustomHdfsScanNode custom_hdfs_scan_node
   10: optional THBaseScanNode hbase_scan_node
   16: optional TDataSourceScanNode data_source_node
   11: optional THashJoinNode hash_join_node
+  // Allow custom hash join operator
   12: optional TAggregationNode agg_node
   13: optional TSortNode sort_node
   14: optional TUnionNode union_node

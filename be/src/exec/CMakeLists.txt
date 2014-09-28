@@ -34,6 +34,7 @@ add_library(Exec STATIC
   external-data-source-executor.cc
   exchange-node.cc
   hash-join-node.cc
+  nested-loop-join-node.cc
   hash-join-node-ir.cc
   hash-table.cc
   hbase-table-sink.cc

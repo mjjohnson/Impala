@@ -48,8 +48,7 @@ public abstract class TableRef implements ParseNode {
 
   // the ref to the left of us, if we're part of a JOIN clause
   protected TableRef leftTblRef_;
-
-  // true if this TableRef has been analyzed; implementing subclass should set it to true
+  
   // at the end of analyze() call.
   protected boolean isAnalyzed_;
 
@@ -95,6 +94,11 @@ public abstract class TableRef implements ParseNode {
   public JoinOperator getJoinOp() {
     // if it's not explicitly set, we're doing an inner join
     return (joinOp_ == null ? JoinOperator.INNER_JOIN : joinOp_);
+  }
+
+  // Added to explicitly set it to CROSS JOIN if enable_custom_op is set in query options
+  public JoinOperator getRealJoinOp() {
+    return joinOp_;
   }
 
   public ArrayList<String> getJoinHints() { return joinHints_; }

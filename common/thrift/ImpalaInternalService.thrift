@@ -84,6 +84,9 @@ struct TQueryOptions {
 
   // test hook to disable topn on the outermost select block.
   24: optional bool disable_outermost_topn = 0
+
+  //Enables using the custom operators instead of the inbuilt ones
+  25: optional bool enable_custom_op = 0
 }
 
 // Impala currently has two types of sessions: Beeswax and HiveServer2

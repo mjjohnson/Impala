@@ -242,10 +242,14 @@ Status HashJoinNode::GetNext(RuntimeState* state, RowBatch* out_batch, bool* eos
         // remember that we matched this build row
         joined_build_rows_.insert(matched_build_row);
         VLOG_ROW << "joined build row: " << matched_build_row;
+        //-----------------------------------------------------------
+        std::cout << "joined build row: " << matched_build_row;
       }
       if (EvalConjuncts(conjuncts, num_conjuncts, out_row)) {
         out_batch->CommitLastRow();
         VLOG_ROW << "match row: " << PrintRow(out_row, row_desc());
+        //-----------------------------------------------------------
+        std::cout << "match row: " << PrintRow(out_row, row_desc());
         ++num_rows_returned_;
         COUNTER_SET(rows_returned_counter_, num_rows_returned_);
         if (out_batch->AtCapacity() || ReachedLimit()) {
@@ -264,6 +268,7 @@ Status HashJoinNode::GetNext(RuntimeState* state, RowBatch* out_batch, bool* eos
       if (EvalConjuncts(conjuncts, num_conjuncts, out_row)) {
         out_batch->CommitLastRow();
         VLOG_ROW << "match row: " << PrintRow(out_row, row_desc());
+        std::cout << "match row (LINE 271): " << PrintRow(out_row, row_desc());
         ++num_rows_returned_;
         COUNTER_SET(rows_returned_counter_, num_rows_returned_);
         matched_probe_ = true;
@@ -314,6 +319,7 @@ Status HashJoinNode::GetNext(RuntimeState* state, RowBatch* out_batch, bool* eos
     // join remaining rows in probe batch_
     current_left_child_row_ = left_batch_->GetRow(left_batch_pos_++);
     VLOG_ROW << "probe row: " << GetLeftChildRowString(current_left_child_row_);
+    std::cout << "probe row (LINE 322): " << GetLeftChildRowString(current_left_child_row_);
     matched_probe_ = false;
     hash_tbl_iterator_ = hash_tbl_->Find(current_left_child_row_);
   }
