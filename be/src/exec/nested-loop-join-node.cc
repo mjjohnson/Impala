@@ -108,12 +108,17 @@ Status NestedLoopJoinNode::GetNext(RuntimeState* state, RowBatch* output_batch, 
  */
 int NestedLoopJoinNode::DoNestedLoopJoin(RowBatch* output_batch, RowBatch* batch,
     int row_batch_capacity) {
+  
+  int rows_returned = 0;
+  if (output_batch == NULL || batch == NULL || row_batch_capacity == NULL) {
+     return rows_returned;
+  }
+  
   int row_idx = output_batch->AddRows(row_batch_capacity);
   DCHECK(row_idx != RowBatch::INVALID_ROW_INDEX);
   uint8_t* output_row_mem = reinterpret_cast<uint8_t*>(output_batch->GetRow(row_idx));
   TupleRow* output_row = reinterpret_cast<TupleRow*>(output_row_mem);
 
-  int rows_returned = 0;
   Expr* const* conjuncts = &conjuncts_[0];
 
   while (true) {

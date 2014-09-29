@@ -11,8 +11,11 @@ def run_query(query, enable_custom_op):
             stdout=PIPE, stderr=PIPE)
     input = "set enable_custom_op={custom}; {query}".format(
             custom='true' if enable_custom_op else 'false', query=query)
-    output = p.communicate(input=input)[0]
-    return output
+    output = p.communicate(input=input)
+    if 'ERROR' in output[0] or 'ERROR' in output[1]:
+        raise Exception("the following query: {query} returned an error: "
+                "{error}".format(query=query, error=output))
+    return output[0]
 
 
 def strip_output(output):
@@ -54,7 +57,8 @@ def run_tests(filename):
                         bnl_output=strip_output(bnl_output))
     end = time.time()
     print ("ran {tests} tests in {sec} seconds ({passed} passed, {failed} "
-            "failed".format(tests=tests, sec=round(end-start, 1), passed=tests-failures, failed=failures))
+            "failed)".format(tests=tests, sec=round(end-start, 1),
+                passed=tests-failures, failed=failures))
 
 
 def main(argv):
