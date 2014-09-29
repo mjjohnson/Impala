@@ -3,10 +3,10 @@
 import os
 from subprocess import Popen, PIPE
 import sys
-from StringIO import StringIO
+import time
 
 
-def get_output(query, enable_custom_op):
+def run_query(query, enable_custom_op):
     p = Popen([os.environ["IMPALA_HOME"] + "/bin/impala-shell.sh"], stdin=PIPE,
             stdout=PIPE, stderr=PIPE)
     input = "set enable_custom_op={custom}; {query}".format(
@@ -20,14 +20,30 @@ def strip_output(output):
     return '\n'.join(output_lines)
 
 
-def run_tests(filename):
-    with open(filename, 'rU') as f:
-        failures = 0
-        for line in f:
-            orig_output = get_output(line, False)
-            bnl_output = get_output(line, True)
+def create_test_table():
+    sql = """DROP TABLE IF EXISTS mj_test_table;
+             CREATE TABLE mj_test_table (id INT, id2 INT) STORED AS TEXTFILE;
+             INSERT INTO mj_test_table values
+               (1,NULL), (137,5000), (NULL,5000), (5000,NULL);"""
+    run_query(sql, False)
 
-            print strip_output(bnl_output)
+
+def run_tests(filename):
+    create_test_table()
+    tests = 0
+    failures = 0
+    start = time.time()
+    with open(filename, 'rU') as f:
+        for line in f:
+            line = line.strip()
+            # Ignore blank lines and treat -- as commented lines.
+            if not line or line.startswith('--'):
+                continue
+
+            tests += 1
+            orig_output = run_query(line, False)
+            bnl_output = run_query(line, True)
+
             if orig_output != bnl_output:
                 failures += 1
                 print "got different output for query: {query}".format(
@@ -36,8 +52,9 @@ def run_tests(filename):
                         orig_output=strip_output(orig_output))
                 print "bnl output:\n{bnl_output}".format(
                         bnl_output=strip_output(bnl_output))
-    if failures:
-        print "{failures} tests failed".format(failures=failures)
+    end = time.time()
+    print ("ran {tests} tests in {sec} seconds ({passed} passed, {failed} "
+            "failed".format(tests=tests, sec=round(end-start, 1), passed=tests-failures, failed=failures))
 
 
 def main(argv):
