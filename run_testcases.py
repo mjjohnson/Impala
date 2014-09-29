@@ -56,7 +56,7 @@ def run_tests(filename):
                 print "bnl output:\n{bnl_output}".format(
                         bnl_output=strip_output(bnl_output))
     end = time.time()
-    print ("ran {tests} tests in {sec} seconds ({passed} passed, {failed} "
+    print ("Ran {tests} tests in {sec} seconds ({passed} passed, {failed} "
             "failed)".format(tests=tests, sec=round(end-start, 1),
                 passed=tests-failures, failed=failures))
 

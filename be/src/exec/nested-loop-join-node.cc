@@ -52,7 +52,9 @@ Status NestedLoopJoinNode::Prepare(RuntimeState* state) {
  * Close any open right_child structures, such as row batches or pool
  */
 void NestedLoopJoinNode::Close(RuntimeState* state) {
+  // If we're already closed, nothing to do.
   if (is_closed()) return;
+
   right_child_batches_.Reset();
   right_child_pool_.reset();
   BlockingJoinNode::Close(state);
@@ -110,25 +112,39 @@ int NestedLoopJoinNode::DoNestedLoopJoin(RowBatch* output_batch, RowBatch* batch
     int row_batch_capacity) {
   
   int rows_returned = 0;
+  // Sanity checks
   if (UNLIKELY(output_batch == NULL || batch == NULL || row_batch_capacity == NULL))
       return rows_returned;
   
+  // Initialize local variables
   int row_idx = output_batch->AddRows(row_batch_capacity);
   DCHECK(row_idx != RowBatch::INVALID_ROW_INDEX);
   uint8_t* output_row_mem = reinterpret_cast<uint8_t*>(output_batch->GetRow(row_idx));
   TupleRow* output_row = reinterpret_cast<TupleRow*>(output_row_mem);
   TupleRow* temp_right_child_row;
   Expr* const* conjuncts = &conjuncts_[0];
-  if (conjuncts == NULL || conjuncts_.size() == 0) return rows_returned;
 
+  // Sanity check
+  if (UNLIKELY(conjuncts == NULL || conjuncts_.size() == 0)) return rows_returned;
+
+  // Loop over all the left rows
   while (true) {
+    // Loop over all the right rows
     while (!current_right_child_row_.AtEnd()) {
+      // Assign to the temp right row so we can perform a sanity check on it
       temp_right_child_row = current_right_child_row_.GetRow();
+      // Advance to the next right row
       current_right_child_row_.Next();
+      // Sanity checks
       if (UNLIKELY(current_left_child_row_ == NULL || temp_right_child_row == NULL))
           continue;
+
+      // Create the output row, which would be formed by combining this left
+      // child with this right child
       CreateOutputRow(output_row, current_left_child_row_, temp_right_child_row);
 
+      // Check to see if this row should be added to the output by evaluating
+      // the conjuncts
       if (!EvalConjuncts(conjuncts, conjuncts_.size(), output_row)) continue;
       ++rows_returned;
       // Filled up out batch or hit limit
@@ -142,6 +158,8 @@ int NestedLoopJoinNode::DoNestedLoopJoin(RowBatch* output_batch, RowBatch* batch
     // Advance to the next row in the left child batch
     if (UNLIKELY(left_batch_pos_ == batch->num_rows())) goto end;
     current_left_child_row_ = batch->GetRow(left_batch_pos_++);
+    // Reset the right row back to the beginning so we can scan it again for
+    // the next left row.
     current_right_child_row_ = right_child_batches_.Iterator();
   }
 
