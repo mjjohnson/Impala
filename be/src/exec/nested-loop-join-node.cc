@@ -110,21 +110,24 @@ int NestedLoopJoinNode::DoNestedLoopJoin(RowBatch* output_batch, RowBatch* batch
     int row_batch_capacity) {
   
   int rows_returned = 0;
-  if (output_batch == NULL || batch == NULL || row_batch_capacity == NULL) {
-     return rows_returned;
-  }
+  if (UNLIKELY(output_batch == NULL || batch == NULL || row_batch_capacity == NULL))
+      return rows_returned;
   
   int row_idx = output_batch->AddRows(row_batch_capacity);
   DCHECK(row_idx != RowBatch::INVALID_ROW_INDEX);
   uint8_t* output_row_mem = reinterpret_cast<uint8_t*>(output_batch->GetRow(row_idx));
   TupleRow* output_row = reinterpret_cast<TupleRow*>(output_row_mem);
-
+  TupleRow* temp_right_child_row;
   Expr* const* conjuncts = &conjuncts_[0];
+  if (conjuncts == NULL || conjuncts_.size() == 0) return rows_returned;
 
   while (true) {
     while (!current_right_child_row_.AtEnd()) {
-      CreateOutputRow(output_row, current_left_child_row_, current_right_child_row_.GetRow());
+      temp_right_child_row = current_right_child_row_.GetRow();
       current_right_child_row_.Next();
+      if (UNLIKELY(current_left_child_row_ == NULL || temp_right_child_row == NULL))
+          continue;
+      CreateOutputRow(output_row, current_left_child_row_, temp_right_child_row);
 
       if (!EvalConjuncts(conjuncts, conjuncts_.size(), output_row)) continue;
       ++rows_returned;
