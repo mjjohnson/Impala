@@ -43,6 +43,8 @@ NestedLoopJoinNode::NestedLoopJoinNode(
  * Initialize any row pools or batches for the right child here 
  */
 Status NestedLoopJoinNode::Prepare(RuntimeState* state) {
+  RETURN_IF_ERROR(BlockingJoinNode::Prepare(state));
+  right_child_pool_.reset(new ObjectPool());
   return Status::OK;
 }
 
@@ -50,6 +52,10 @@ Status NestedLoopJoinNode::Prepare(RuntimeState* state) {
  * Close any open right_child structures, such as row batches or pool
  */
 void NestedLoopJoinNode::Close(RuntimeState* state) {
+  if (is_closed()) return;
+  right_child_batches_.Reset();
+  right_child_pool_.reset();
+  BlockingJoinNode::Close(state);
 }
 
 /**
@@ -102,9 +108,37 @@ Status NestedLoopJoinNode::GetNext(RuntimeState* state, RowBatch* output_batch, 
  */
 int NestedLoopJoinNode::DoNestedLoopJoin(RowBatch* output_batch, RowBatch* batch,
     int row_batch_capacity) {
-  //Number of rows returned by this function
-  int rows_returned = 0;
+  int row_idx = output_batch->AddRows(row_batch_capacity);
+  DCHECK(row_idx != RowBatch::INVALID_ROW_INDEX);
+  uint8_t* output_row_mem = reinterpret_cast<uint8_t*>(output_batch->GetRow(row_idx));
+  TupleRow* output_row = reinterpret_cast<TupleRow*>(output_row_mem);
 
+  int rows_returned = 0;
+  Expr* const* conjuncts = &conjuncts_[0];
+
+  while (true) {
+    while (!current_right_child_row_.AtEnd()) {
+      CreateOutputRow(output_row, current_left_child_row_, current_right_child_row_.GetRow());
+      current_right_child_row_.Next();
+
+      if (!EvalConjuncts(conjuncts, conjuncts_.size(), output_row)) continue;
+      ++rows_returned;
+      // Filled up out batch or hit limit
+      if (UNLIKELY(rows_returned == row_batch_capacity)) goto end;
+      // Advance to next out row
+      output_row_mem += output_batch->row_byte_size();
+      output_row = reinterpret_cast<TupleRow*>(output_row_mem);
+    }
+
+    DCHECK(current_right_child_row_.AtEnd());
+    // Advance to the next row in the left child batch
+    if (UNLIKELY(left_batch_pos_ == batch->num_rows())) goto end;
+    current_left_child_row_ = batch->GetRow(left_batch_pos_++);
+    current_right_child_row_ = right_child_batches_.Iterator();
+  }
+
+end:
+  output_batch->CommitRows(rows_returned);
   return rows_returned;
 }
 
