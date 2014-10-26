@@ -666,6 +666,7 @@ void SimpleScheduler::ComputeFragmentHosts(const TQueryExecRequest& exec_request
   scan_node_types.push_back(TPlanNodeType::HDFS_SCAN_NODE);
   scan_node_types.push_back(TPlanNodeType::HBASE_SCAN_NODE);
   scan_node_types.push_back(TPlanNodeType::DATA_SOURCE_NODE);
+  scan_node_types.push_back(TPlanNodeType::CSV_SCAN_NODE);
 
   unordered_set<TNetworkAddress> unique_hosts;
   // compute hosts of producer fragment before those of consumer fragment(s),

@@ -25,7 +25,9 @@
 #include "exprs/expr.h"
 #include "exec/aggregation-node.h"
 #include "exec/hash-join-node.h"
+#include "exec/nested-loop-join-node.h"
 #include "exec/hdfs-scan-node.h"
+#include "exec/csv-scan-node.h"
 #include "exec/hbase-scan-node.h"
 #include "exec/data-source-scan-node.h"
 #include "exec/exchange-node.h"
@@ -238,6 +240,9 @@ Status ExecNode::CreateNode(ObjectPool* pool, const TPlanNode& tnode,
     case TPlanNodeType::HDFS_SCAN_NODE:
       *node = pool->Add(new HdfsScanNode(pool, tnode, descs));
       break;
+    case TPlanNodeType::CSV_SCAN_NODE:
+          *node = pool->Add(new CsvScanNode(pool, tnode, descs));
+      break;
     case TPlanNodeType::HBASE_SCAN_NODE:
       *node = pool->Add(new HBaseScanNode(pool, tnode, descs));
       break;
@@ -247,6 +252,9 @@ Status ExecNode::CreateNode(ObjectPool* pool, const TPlanNode& tnode,
     case TPlanNodeType::AGGREGATION_NODE:
       *node = pool->Add(new AggregationNode(pool, tnode, descs));
       break;
+    case TPlanNodeType::NESTED_LOOP_JOIN_NODE:
+          *node = pool->Add(new NestedLoopJoinNode(pool, tnode, descs));
+      break; 
     case TPlanNodeType::HASH_JOIN_NODE:
       *node = pool->Add(new HashJoinNode(pool, tnode, descs));
       break;

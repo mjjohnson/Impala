@@ -27,6 +27,7 @@ add_library(Exec STATIC
   base-sequence-scanner.cc
   catalog-op-executor.cc
   cross-join-node.cc
+  csv-scan-node.cc
   data-sink.cc
   data-source-scan-node.cc
   delimited-text-parser.cc
@@ -34,6 +35,7 @@ add_library(Exec STATIC
   external-data-source-executor.cc
   exchange-node.cc
   hash-join-node.cc
+  nested-loop-join-node.cc
   hash-join-node-ir.cc
   hash-table.cc
   hbase-table-sink.cc

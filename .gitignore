@@ -34,3 +34,7 @@ tests/test-hive-udfs/target/
 cdh-*-hdfs-data/
 avro_schemas/
 cluster_logs/
+
+be/html/
+.tags
+.tags_sorted_by_file

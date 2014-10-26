@@ -139,7 +139,10 @@ enum TImpalaQueryOptions {
   DISABLE_CACHED_READS,
 
   // Temporary testing flag
-  DISABLE_OUTERMOST_TOPN
+  DISABLE_OUTERMOST_TOPN,
+
+  //Enable use of custom operators
+  ENABLE_CUSTOM_OP
 }
 
 // The summary of an insert.

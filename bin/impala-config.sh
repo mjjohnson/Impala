@@ -16,6 +16,8 @@
 # setup your environment. If $IMPALA_HOME is undefined
 # this script will set it to the current working directory.
 
+#IMPALA_HOME="/home/cloudera/Impala"
+
 export JAVA_HOME=${JAVA_HOME:-/usr/java/default}
 if [ ! -d $JAVA_HOME ] ; then
     echo "Error! JAVA_HOME must be set to the location of your JDK!"

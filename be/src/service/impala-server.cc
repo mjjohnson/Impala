@@ -996,6 +996,11 @@ Status ImpalaServer::SetQueryOptions(const string& key, const string& value,
         query_options->__set_disable_outermost_topn(
             iequals(value, "true") || iequals(value, "1"));
         break;
+        //Added to enable custom operator execution
+        case TImpalaQueryOptions::ENABLE_CUSTOM_OP:
+        query_options->__set_enable_custom_op(
+            iequals(value, "true") || iequals(value, "1"));
+        break;
       default:
         // We hit this DCHECK(false) if we forgot to add the corresponding entry here
         // when we add a new query option.
@@ -1275,6 +1280,10 @@ void ImpalaServer::TQueryOptionsToMap(const TQueryOptions& query_option,
       case TImpalaQueryOptions::DISABLE_OUTERMOST_TOPN:
         val << query_option.disable_outermost_topn;
         break;
+        // Added to enable custom operator execution
+      case TImpalaQueryOptions::ENABLE_CUSTOM_OP:
+        val << query_option.enable_custom_op;
+        break;  
       default:
         // We hit this DCHECK(false) if we forgot to add the corresponding entry here
         // when we add a new query option.
