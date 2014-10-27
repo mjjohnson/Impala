@@ -118,7 +118,7 @@ bool CsvScanNode::WriteCompleteTuple(MemPool* pool, std::string line,
   int i = 0;
   for(tokenizer<escaped_list_separator<char> >::iterator beg=tok.begin(); beg!=tok.end();++beg){
 //  for (int i = 0; i < materialized_slots().size(); ++i) {
-
+    if (i == materialized_slots_.size()) break;
     int len = (*beg).length();
 //    int len = fields[i].len;
 //    if (UNLIKELY(len < 0)) {
@@ -131,6 +131,15 @@ bool CsvScanNode::WriteCompleteTuple(MemPool* pool, std::string line,
     error_fields[i] = error;
     *error_in_row |= error;
     i++;
+  }
+
+  // Fill in any missing fields at the end of this tuple
+  while (i < materialized_slots_.size()) {
+      SlotDescriptor* desc = materialized_slots_[i];
+      bool error = !WriteSlot(desc, tuple, NULL, 0, pool);
+      error_fields[i] = error;
+      *error_in_row |= error;
+      i++;
   }
 
   tuple_row->SetTuple(tuple_idx(), tuple);
