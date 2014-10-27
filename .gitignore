@@ -38,3 +38,4 @@ cluster_logs/
 be/html/
 .tags
 .tags_sorted_by_file
+*.log

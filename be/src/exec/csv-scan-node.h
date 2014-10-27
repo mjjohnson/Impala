@@ -4,6 +4,9 @@
 #include <vector>
 #include <memory>
 #include <stdint.h>
+#include <fstream>
+#include <sstream>
+#include <string>
 
 #include <boost/scoped_ptr.hpp>
 
@@ -86,6 +89,18 @@ class CsvScanNode : public ExecNode {
   virtual Status Prepare(RuntimeState* state);
   // Create and queue up the rowbatches in the RowBatchQueue
   virtual Status Open(RuntimeState* state);
+
+  virtual bool WriteCompleteTuple(MemPool* pool, std::string line,
+    Tuple* tuple, TupleRow* tuple_row, uint8_t* error_fields,
+    uint8_t* error_in_row);
+
+  virtual int WriteAlignedTuples(MemPool* pool, TupleRow* tuple_row,
+    int row_size, int num_tuples, int max_added_tuples,
+    int slots_per_tuple, int row_idx_start, bool* eos);
+
+  virtual int WriteFields(MemPool* pool, TupleRow* tuple_row,
+            int num_tuples, bool* eos);
+
   // GetNext will call GetNextInternal to dequeue the rowbatch from the RowBatchQueue
   virtual Status GetNext(RuntimeState* state, RowBatch* row_batch, bool* eos);
   //close any open I/O buffers that may have been opened to read the file
@@ -100,6 +115,11 @@ class CsvScanNode : public ExecNode {
 
  private:
   RuntimeState* runtime_state_;
+
+  // File to read from
+  std::ifstream csv_file_;
+  // Number of rows processed so far
+  int num_rows_;
 
   // Descriptor for tuples this node constructs
   // Check out what tuple details you can infer from this variable

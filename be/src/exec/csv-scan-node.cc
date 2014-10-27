@@ -88,6 +88,10 @@ void CsvScanNode::StartNewRowBatch() {
 }
 
 Status CsvScanNode::Open(RuntimeState* state) {
+        std::string file_name = GetFilePath();
+        csv_file_.open(file_name.c_str());
+        num_rows_ = 0;
+        StartNewRowBatch();
 	return Status::OK;
 }
 
@@ -102,12 +106,116 @@ int CsvScanNode::GetMemory(MemPool** pool, Tuple** tuple_mem,
 	return batch_->capacity() - batch_->num_rows();
 }
 
+bool CsvScanNode::WriteCompleteTuple(MemPool* pool, std::string line,
+    Tuple* tuple, TupleRow* tuple_row, uint8_t* error_fields,
+    uint8_t* error_in_row) {
+  *error_in_row = false;
+  // Initialize tuple before materializing slots
+  InitTuple(tuple);
+
+  tokenizer<escaped_list_separator<char> > tok(line);
+
+  int i = 0;
+  for(tokenizer<escaped_list_separator<char> >::iterator beg=tok.begin(); beg!=tok.end();++beg){
+//  for (int i = 0; i < materialized_slots().size(); ++i) {
+
+    int len = (*beg).length();
+//    int len = fields[i].len;
+//    if (UNLIKELY(len < 0)) {
+//      len = -len;
+//    }
+
+    SlotDescriptor* desc = materialized_slots_[i];
+    std::string token(*beg);
+    bool error = !WriteSlot(desc, tuple, token.c_str(), len, pool);
+    error_fields[i] = error;
+    *error_in_row |= error;
+    i++;
+  }
+
+  tuple_row->SetTuple(tuple_idx(), tuple);
+  Expr* const* conjuncts = &conjuncts_[0];
+  return ExecNode::EvalConjuncts(conjuncts, conjuncts_.size(), tuple_row);
+}
+
+int CsvScanNode::WriteAlignedTuples(MemPool* pool, TupleRow* tuple_row,
+    int row_size, int num_tuples, int max_added_tuples,
+    int slots_per_tuple, int row_idx_start, bool* eos) {
+
+  DCHECK(tuple_ != NULL);
+  uint8_t* tuple_row_mem = reinterpret_cast<uint8_t*>(tuple_row);
+  uint8_t* tuple_mem = reinterpret_cast<uint8_t*>(tuple_);
+  Tuple* tuple = reinterpret_cast<Tuple*>(tuple_mem);
+
+  uint8_t error[slots_per_tuple];
+  memset(error, 0, sizeof(error));
+
+  int tuples_returned = 0;
+
+  // Loop through the file and materialize all the tuples
+  std::string line;
+  while (getline(csv_file_, line)) {
+  // for (int i = 0; i < num_tuples; ++i) {
+    uint8_t error_in_row = false;
+    // Materialize a single tuple.  This function will be replaced by a codegen'd
+    // function.
+    if (WriteCompleteTuple(pool, line, tuple, tuple_row, error,
+          &error_in_row)) {
+      ++tuples_returned;
+      tuple_mem += tuple_desc_->byte_size();
+      tuple_row_mem += row_size;
+      tuple = reinterpret_cast<Tuple*>(tuple_mem);
+      tuple_row = reinterpret_cast<TupleRow*>(tuple_row_mem);
+    }
+
+    if (tuples_returned == max_added_tuples) {
+      *eos = false;
+      break;
+    }
+    *eos = true;
+  }
+
+  return tuples_returned;
+}
+
+int CsvScanNode::WriteFields(MemPool* pool, TupleRow* tuple_row,
+            int num_tuples, bool* eos) {
+  int num_tuples_processed = 0;
+  int num_tuples_materialized = 0;
+  if (num_tuples > 0) {
+    int max_added_tuples = (limit() == -1) ?
+          num_tuples : limit() - rows_returned();
+    int tuples_returned = 0;
+    tuples_returned = WriteAlignedTuples(pool, tuple_row,
+        batch_->row_byte_size(), num_tuples, max_added_tuples,
+        materialized_slots_.size(), num_tuples_processed, eos);
+    if (tuples_returned == -1) return 0;
+
+    num_tuples_materialized += tuples_returned;
+  }
+  return num_tuples_materialized;
+}
+
 Status CsvScanNode::GetNext(RuntimeState* state, RowBatch* row_batch,
 		bool* eos) {
-	Status status = GetNextInternal(state, row_batch, eos);
-	if (status.IsMemLimitExceeded())
-		state->SetMemLimitExceeded();
-	return status;
+        MemPool* pool;
+        TupleRow* tuple_row_mem;
+        int max_tuples = GetMemory(&pool, &tuple_, &tuple_row_mem);
+        // TODO: do something with max_tuples
+        max_tuples++;
+        int num_tuples = WriteFields(pool, tuple_row_mem, 1024, eos);
+        if (num_tuples <= 0) *eos = true;
+        num_rows_ += num_tuples;
+        if (*eos) {
+            RETURN_IF_ERROR(CommitLastRows(num_rows_));
+            Status status = GetNextInternal(state, row_batch, eos);
+            if (status.IsMemLimitExceeded())
+                    state->SetMemLimitExceeded();
+            *eos = true;
+            SetDone();
+            return status;
+        }
+	return Status::OK;
 }
 
 Status CsvScanNode::GetNextInternal(RuntimeState* state, RowBatch* row_batch,
@@ -156,6 +264,7 @@ void CsvScanNode::Close(RuntimeState* state) {
 	if (is_closed())
 		return;
 	SetDone();
+        csv_file_.close();
 
 	//housekeeping tasks
 	num_owned_io_buffers_ -= materialized_row_batches_->Cleanup();
