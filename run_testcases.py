@@ -69,7 +69,8 @@ def run_tests(results_filename, test_filename):
             statements to be run on Impala and compared with and without the
             custom block nested join enabled.
     """
-    for table_name in ('basictest', 'testlong', 'testmissing', 'testextra', 'testescape'):
+    for table_name in ('basictest', 'testlong', 'testmissing', 'testextra',
+            'testescape'):
         create_test_table(table_name)
 
     tests = 0
@@ -99,7 +100,8 @@ def run_tests(results_filename, test_filename):
             tests += 1
             output = strip_output(run_query(line, True))
 
-            # The two outputs should be equal if the custom join is correct
+            # This output should match the known-correct output unless we've
+            # broken something.
             if output != result_blocks[tests-1]:
                 failures += 1
                 print "got different output for query: {query}".format(
@@ -117,8 +119,8 @@ def run_tests(results_filename, test_filename):
 
 def main(argv):
     if len(argv) != 3:
-        print "Usage: {program_name} <results_filename> <testcase_sql_filename>".format(
-                program_name=argv[0])
+        print ("Usage: {program_name} <results_filename> "
+               "<testcase_sql_filename>").format(program_name=argv[0])
         exit()
    
     run_tests(argv[1], argv[2])

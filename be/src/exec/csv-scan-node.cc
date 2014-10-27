@@ -113,18 +113,16 @@ bool CsvScanNode::WriteCompleteTuple(MemPool* pool, std::string line,
   // Initialize tuple before materializing slots
   InitTuple(tuple);
 
+  // Use Boost's tokenizer library to handle CSV parsing (including escaping)
   tokenizer<escaped_list_separator<char> > tok(line);
 
   int i = 0;
   for(tokenizer<escaped_list_separator<char> >::iterator beg=tok.begin(); beg!=tok.end();++beg){
-//  for (int i = 0; i < materialized_slots().size(); ++i) {
+    // Make sure we aren't going past the number of slots (can happen if the
+    // CSV file has more fields per line than were defined in the table schema)
     if (i == materialized_slots_.size()) break;
-    int len = (*beg).length();
-//    int len = fields[i].len;
-//    if (UNLIKELY(len < 0)) {
-//      len = -len;
-//    }
 
+    int len = (*beg).length();
     SlotDescriptor* desc = materialized_slots_[i];
     std::string token(*beg);
     bool error = !WriteSlot(desc, tuple, token.c_str(), len, pool);
@@ -133,7 +131,8 @@ bool CsvScanNode::WriteCompleteTuple(MemPool* pool, std::string line,
     i++;
   }
 
-  // Fill in any missing fields at the end of this tuple
+  // Fill in any missing fields at the end of this tuple (if there were more
+  // fields in the schema than in this line of the CSV file).
   while (i < materialized_slots_.size()) {
       SlotDescriptor* desc = materialized_slots_[i];
       bool error = !WriteSlot(desc, tuple, NULL, 0, pool);
@@ -144,6 +143,7 @@ bool CsvScanNode::WriteCompleteTuple(MemPool* pool, std::string line,
 
   tuple_row->SetTuple(tuple_idx(), tuple);
   Expr* const* conjuncts = &conjuncts_[0];
+  // Check the conjuncts and return true if we should keep these results
   return ExecNode::EvalConjuncts(conjuncts, conjuncts_.size(), tuple_row);
 }
 
@@ -164,10 +164,8 @@ int CsvScanNode::WriteAlignedTuples(MemPool* pool, TupleRow* tuple_row,
   // Loop through the file and materialize all the tuples
   std::string line;
   while (getline(csv_file_, line)) {
-  // for (int i = 0; i < num_tuples; ++i) {
     uint8_t error_in_row = false;
-    // Materialize a single tuple.  This function will be replaced by a codegen'd
-    // function.
+    // Materialize a single tuple.
     if (WriteCompleteTuple(pool, line, tuple, tuple_row, error,
           &error_in_row)) {
       ++tuples_returned;
@@ -209,9 +207,7 @@ Status CsvScanNode::GetNext(RuntimeState* state, RowBatch* row_batch,
 		bool* eos) {
         MemPool* pool;
         TupleRow* tuple_row_mem;
-        int max_tuples = GetMemory(&pool, &tuple_, &tuple_row_mem);
-        // TODO: do something with max_tuples
-        max_tuples++;
+        GetMemory(&pool, &tuple_, &tuple_row_mem);
         int num_tuples = WriteFields(pool, tuple_row_mem, batch_->capacity(),
             eos);
         if (num_tuples <= 0) *eos = true;
@@ -226,7 +222,7 @@ Status CsvScanNode::GetNext(RuntimeState* state, RowBatch* row_batch,
             return status;
         } else if (num_rows_ == batch_->capacity()) {
             RETURN_IF_ERROR(CommitRows(num_rows_));
-            max_tuples = GetMemory(&pool, &tuple_, &tuple_row_mem);
+            GetMemory(&pool, &tuple_, &tuple_row_mem);
             num_rows_ = 0;
             Status status = GetNextInternal(state, row_batch, eos);
             if (status.IsMemLimitExceeded())
