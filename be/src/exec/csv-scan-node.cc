@@ -203,7 +203,8 @@ Status CsvScanNode::GetNext(RuntimeState* state, RowBatch* row_batch,
         int max_tuples = GetMemory(&pool, &tuple_, &tuple_row_mem);
         // TODO: do something with max_tuples
         max_tuples++;
-        int num_tuples = WriteFields(pool, tuple_row_mem, 1024, eos);
+        int num_tuples = WriteFields(pool, tuple_row_mem, batch_->capacity(),
+            eos);
         if (num_tuples <= 0) *eos = true;
         num_rows_ += num_tuples;
         if (*eos) {
@@ -213,6 +214,14 @@ Status CsvScanNode::GetNext(RuntimeState* state, RowBatch* row_batch,
                     state->SetMemLimitExceeded();
             *eos = true;
             SetDone();
+            return status;
+        } else if (num_rows_ == batch_->capacity()) {
+            RETURN_IF_ERROR(CommitRows(num_rows_));
+            max_tuples = GetMemory(&pool, &tuple_, &tuple_row_mem);
+            num_rows_ = 0;
+            Status status = GetNextInternal(state, row_batch, eos);
+            if (status.IsMemLimitExceeded())
+                    state->SetMemLimitExceeded();
             return status;
         }
 	return Status::OK;
